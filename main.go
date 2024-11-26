@@ -131,7 +131,9 @@ func collect_results(done_chan chan bool) {
 }
 
 func main() {
-	fileName := "links.csv"
+	fileName := utils.GetFileName()
+
+	fmt.Printf("Reading file: %s\n", fileName)
 
 	links, err := utils.ReadCSV(fileName, false)
 	if err != nil {

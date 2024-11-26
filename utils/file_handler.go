@@ -2,6 +2,8 @@ package utils
 
 import (
 	"encoding/csv"
+	"errors"
+	"flag"
 	"os"
 )
 
@@ -36,4 +38,22 @@ func ReadCSV(fileName string, hasHeaders bool) ([]string, error) {
 	}
 
 	return urls, nil
+}
+
+// Gets the file name using flags
+func GetFileName() string {
+	fileName := flag.String("file", "", "Path to the input CSV file")
+	f := flag.String("f", "", "Short alias for -file")
+
+	flag.Parse()
+
+	if *fileName == "" && *f == "" {
+		panic(errors.New("file name must be provided using -f or --file"))
+	}
+
+	if *f != "" {
+		*fileName = *f
+	}
+
+	return *fileName
 }
