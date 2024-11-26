@@ -130,7 +130,28 @@ func collect_results(done_chan chan bool) {
 	done_chan <- true
 }
 
+// Gets unique hosts from a given list of links
+func get_domains(links []string) map[string]bool {
+	domains := map[string]bool{}
+
+	for _, link := range links {
+		u, err := url.Parse(link)
+		if err != nil {
+			panic(err)
+		}
+
+		// Add the unique domain
+		_, ok := domains[u.Host]
+		if !ok {
+			domains[u.Host] = true
+		}
+
+	}
+	return domains
+}
+
 func main() {
+	// Read file and get urls
 	fileName := utils.GetFileName()
 
 	fmt.Printf("Reading file: %s\n", fileName)
@@ -144,21 +165,8 @@ func main() {
 		panic(errors.New("input file has no links"))
 	}
 
-	domains := map[string]bool{}
-
-	for _, link := range links {
-		u, err := url.Parse(link)
-		if err != nil {
-			panic(err)
-		}
-
-		// Check if domain exists:
-		_, ok := domains[u.Host]
-		if !ok {
-			domains[u.Host] = true
-		}
-
-	}
+	// Determine num_workers and scrape
+	domains := get_domains(links)
 
 	NUM_WORKERS = len(domains)
 
@@ -175,5 +183,6 @@ func main() {
 	end := time.Now()
 
 	diff_seconds := end.Sub(start).Seconds()
+
 	fmt.Printf("visited %v links in %v seconds using %v workers\n", len(links), diff_seconds, len(domains))
 }
