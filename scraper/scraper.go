@@ -10,13 +10,13 @@ import (
 	"golang.org/x/net/html"
 )
 
-type Job struct {
+type job struct {
 	id  int
 	url string
 }
 
-type Result struct {
-	job   Job
+type result struct {
+	job   job
 	title string
 	err   error
 }
@@ -27,8 +27,8 @@ const TIMEOUT time.Duration = 10 * time.Second
 // Initialized after determining the
 var NUM_WORKERS int
 
-var jobs = make(chan Job, NUM_WORKERS)
-var results = make(chan Result, NUM_WORKERS)
+var jobs = make(chan job, NUM_WORKERS)
+var results = make(chan result, NUM_WORKERS)
 
 // Returns the text from a title element, if it exists
 func get_title(n *html.Node) string {
@@ -87,7 +87,7 @@ func worker(wg *sync.WaitGroup) {
 	for job := range jobs {
 
 		title, err := processPage(job.url)
-		res := Result{job: job,
+		res := result{job: job,
 			title: title,
 			err:   err}
 
@@ -114,7 +114,7 @@ func createWorkerPool(num_workers int) {
 func allocate_jobs(links []string) {
 
 	for i, link := range links {
-		job := Job{id: i, url: link}
+		job := job{id: i, url: link}
 		jobs <- job
 	}
 	close(jobs)
