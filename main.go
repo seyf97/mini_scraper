@@ -87,7 +87,6 @@ func processPage(link string) (string, error) {
 func worker(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for job := range jobs {
-		// fmt.Printf("working on job ID: %v\n", job.id)
 
 		title, err := processPage(job.url)
 		res := Result{job: job,
@@ -132,7 +131,7 @@ func collect_results(done_chan chan bool) {
 }
 
 func main() {
-	fileName := "links_2.csv"
+	fileName := "links.csv"
 
 	links, err := utils.ReadCSV(fileName, false)
 	if err != nil {
@@ -142,9 +141,6 @@ func main() {
 	if len(links) == 0 {
 		panic(errors.New("input file has no links"))
 	}
-
-	// Just testing first N
-	// links = links[:10000]
 
 	domains := map[string]bool{}
 
