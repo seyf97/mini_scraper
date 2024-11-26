@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-// Reads the csv with the links, assuming its a single column
+// Reads a csv file, assuming it has a single column
 func ReadCSV(fileName string, hasHeaders bool) ([]string, error) {
 
 	file, err := os.Open(fileName)
