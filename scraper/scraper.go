@@ -129,8 +129,8 @@ func collect_results(done_chan chan bool) {
 }
 
 // Gets unique hosts from a given list of links
-func getDomains(links []string) map[string]bool {
-	domains := map[string]bool{}
+func GetDomainLinks(links []string) map[string][]string {
+	domainLinks := map[string][]string{}
 
 	for _, link := range links {
 		u, err := url.Parse(link)
@@ -139,21 +139,23 @@ func getDomains(links []string) map[string]bool {
 		}
 
 		// Add the unique domain
-		_, ok := domains[u.Host]
-		if !ok {
-			domains[u.Host] = true
+		_, isPresent := domainLinks[u.Host]
+		if !isPresent {
+			domainLinks[u.Host] = []string{link}
+		} else {
+			domainLinks[u.Host] = append(domainLinks[u.Host], link)
 		}
 
 	}
-	return domains
+	return domainLinks
 }
 
 // Scrapes links concurrently
 func Scrape(links []string) {
 
 	// Determine num_workers
-	domains := getDomains(links)
-	NUM_WORKERS = len(domains)
+	domainLinks := GetDomainLinks(links)
+	NUM_WORKERS = len(domainLinks)
 
 	done_chan := make(chan bool)
 
