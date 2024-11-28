@@ -6,8 +6,6 @@ import (
 	"net/url"
 	"sync"
 	"time"
-
-	"golang.org/x/net/html"
 )
 
 type job struct {
@@ -16,10 +14,10 @@ type job struct {
 }
 
 type result struct {
-	domain string
-	url    string
-	title  string
-	err    error
+	domain   string
+	url      string
+	finalURL string
+	err      error
 }
 
 type Scraper struct {
@@ -29,8 +27,8 @@ type Scraper struct {
 
 // Constants
 const TIMEOUT time.Duration = 10 * time.Second
-const DELAY time.Duration = 250 * time.Millisecond
-const MAX_WORKERS int = 5000
+const DELAY time.Duration = 500 * time.Millisecond
+const MAX_WORKERS int = 50000
 
 // Initialized after determining the
 var NUM_WORKERS int
@@ -45,19 +43,25 @@ func NewScraper(numWorkers int) *Scraper {
 // Gets the page title
 func processPage(link string) (string, error) {
 	client := http.Client{Timeout: TIMEOUT}
-	res, err := client.Get(link)
+	resp, err := client.Get(link)
 	if err != nil {
 		return "", err
 	}
 
-	doc, err := html.Parse(res.Body)
-	if err != nil {
-		return "", err
-	}
+	defer resp.Body.Close()
 
-	title := get_title(doc)
+	// Get the final redirected link
+	finalURL := resp.Request.URL.String()
 
-	return title, nil
+	// Get the title
+	// doc, err := html.Parse(resp.Body)
+	// if err != nil {
+	// 	return "", err
+	// }
+
+	// title := get_title(doc)
+
+	return finalURL, nil
 }
 
 // Processes jobs from the job chan and sends results to result chan.
@@ -68,13 +72,13 @@ func (s *Scraper) worker(wg *sync.WaitGroup) {
 	for job := range s.jobs {
 
 		for _, url := range job.urls {
-			title, err := processPage(url)
+			finalURL, err := processPage(url)
 
 			res := result{
-				domain: job.domain,
-				title:  title,
-				url:    url,
-				err:    err,
+				domain:   job.domain,
+				finalURL: finalURL,
+				url:      url,
+				err:      err,
 			}
 
 			s.results <- res
@@ -110,7 +114,7 @@ func (s *Scraper) allocate_jobs(domLinks map[string][]string) {
 // Collects results from results chan
 func (s *Scraper) collect_results(done_chan chan bool) {
 	for res := range s.results {
-		fmt.Printf("url: %v\ntitle: %v\nerror: %v\n\n", res.url, res.title, res.err)
+		fmt.Printf("url_i: %v\nurl_f: %v\nerror: %v\n\n", res.url, res.finalURL, res.err)
 	}
 	done_chan <- true
 }

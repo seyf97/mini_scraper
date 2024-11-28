@@ -25,7 +25,7 @@ func main() {
 	}
 
 	// testing
-	links = links[:5000]
+	links = links[:50000]
 
 	// Scrape links
 	start := time.Now()
