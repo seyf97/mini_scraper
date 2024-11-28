@@ -15,7 +15,7 @@ func main() {
 
 	fmt.Printf("Reading file: %s\n", fileName)
 
-	links, err := utils.ReadCSV(fileName, false)
+	links, err := utils.ReadCSV(fileName, true)
 	if err != nil {
 		panic(err)
 	}
@@ -24,9 +24,12 @@ func main() {
 		panic(errors.New("input file has no links"))
 	}
 
+	// testing
+	links = links[:5000]
+
 	// Scrape links
 	start := time.Now()
-	scraper.Scrape(links)
+	scraper.Run(links)
 	end := time.Now()
 
 	diff_seconds := end.Sub(start).Seconds()

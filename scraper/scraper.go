@@ -21,14 +21,26 @@ type result struct {
 	err   error
 }
 
+type Scraper struct {
+	jobs    chan job
+	results chan result
+}
+
 // Timeout for the get request
 const TIMEOUT time.Duration = 10 * time.Second
+
+// Max workers at any given point
+const MAX_WORKERS int = 5000
 
 // Initialized after determining the
 var NUM_WORKERS int
 
-var jobs = make(chan job, NUM_WORKERS)
-var results = make(chan result, NUM_WORKERS)
+func NewScraper(numWorkers int) *Scraper {
+	return &Scraper{
+		jobs:    make(chan job, numWorkers),
+		results: make(chan result, numWorkers),
+	}
+}
 
 // Gets the page title
 func processPage(link string) (string, error) {
@@ -51,16 +63,16 @@ func processPage(link string) (string, error) {
 // Processes jobs from the job chan and sends results to result chan.
 //
 // Signals WorkerPool once jobs are depleted
-func worker(wg *sync.WaitGroup) {
+func (s *Scraper) worker(wg *sync.WaitGroup) {
 	defer wg.Done()
-	for job := range jobs {
+	for job := range s.jobs {
 
 		title, err := processPage(job.url)
 		res := result{job: job,
 			title: title,
 			err:   err}
 
-		results <- res
+		s.results <- res
 
 		// Sleep between each request
 		time.Sleep(1 * time.Second)
@@ -68,30 +80,30 @@ func worker(wg *sync.WaitGroup) {
 }
 
 // Init a worker pool where each worker gets a job from job chan
-func createWorkerPool(num_workers int) {
+func (s *Scraper) createWorkerPool(num_workers int) {
 	var wg sync.WaitGroup
 
 	for i := 0; i < num_workers; i++ {
 		wg.Add(1)
-		go worker(&wg)
+		go s.worker(&wg)
 	}
 	wg.Wait()
-	close(results)
+	close(s.results)
 }
 
 // Sends jobs to job chan
-func allocate_jobs(links []string) {
+func (s *Scraper) allocate_jobs(links []string) {
 
 	for i, link := range links {
 		job := job{id: i, url: link}
-		jobs <- job
+		s.jobs <- job
 	}
-	close(jobs)
+	close(s.jobs)
 }
 
 // Collects results from results chan
-func collect_results(done_chan chan bool) {
-	for res := range results {
+func (s *Scraper) collect_results(done_chan chan bool) {
+	for res := range s.results {
 		fmt.Printf("url: %v\ntitle: %v\nerror: %v\n\n", res.job.url, res.title, res.err)
 	}
 	done_chan <- true
@@ -120,17 +132,49 @@ func getDomainLinks(links []string) map[string][]string {
 }
 
 // Scrapes links concurrently
-func Scrape(links []string) {
+func Run(links []string) {
 
-	// Determine num_workers
+	// Get links per domain
 	domainLinks := getDomainLinks(links)
-	NUM_WORKERS = len(domainLinks)
 
-	done_chan := make(chan bool)
+	var mixedLinks []string
 
-	go allocate_jobs(links)
-	go collect_results(done_chan)
-	createWorkerPool(NUM_WORKERS)
+	for {
+		fmt.Println("Collecting links per domain...")
+		mixedLinks = []string{}
 
-	<-done_chan
+		// 1. For each domain, get the first link
+
+		for domain, links := range domainLinks {
+			if len(links) > 0 {
+				mixedLinks = append(mixedLinks, links[0])
+				domainLinks[domain] = links[1:]
+			}
+		}
+
+		// End when no more new links
+		if len(mixedLinks) == 0 {
+			break
+		}
+
+		// 2. Scrape mixedLinks using workerpool
+
+		if len(mixedLinks) > MAX_WORKERS {
+			NUM_WORKERS = MAX_WORKERS
+		} else {
+			NUM_WORKERS = len(mixedLinks)
+		}
+
+		s := *NewScraper(NUM_WORKERS)
+
+		done_chan := make(chan bool)
+
+		go s.allocate_jobs(mixedLinks)
+		go s.collect_results(done_chan)
+		s.createWorkerPool(NUM_WORKERS)
+
+		<-done_chan
+
+	}
+
 }
