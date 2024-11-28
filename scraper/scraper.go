@@ -11,14 +11,15 @@ import (
 )
 
 type job struct {
-	id  int
-	url string
+	domain string
+	urls   []string
 }
 
 type result struct {
-	job   job
-	title string
-	err   error
+	domain string
+	url    string
+	title  string
+	err    error
 }
 
 type Scraper struct {
@@ -26,10 +27,9 @@ type Scraper struct {
 	results chan result
 }
 
-// Timeout for the get request
+// Constants
 const TIMEOUT time.Duration = 10 * time.Second
-
-// Max workers at any given point
+const DELAY time.Duration = 250 * time.Millisecond
 const MAX_WORKERS int = 5000
 
 // Initialized after determining the
@@ -67,15 +67,21 @@ func (s *Scraper) worker(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for job := range s.jobs {
 
-		title, err := processPage(job.url)
-		res := result{job: job,
-			title: title,
-			err:   err}
+		for _, url := range job.urls {
+			title, err := processPage(url)
 
-		s.results <- res
+			res := result{
+				domain: job.domain,
+				title:  title,
+				url:    url,
+				err:    err,
+			}
+
+			s.results <- res
+		}
 
 		// Sleep between each request
-		time.Sleep(1 * time.Second)
+		time.Sleep(DELAY)
 	}
 }
 
@@ -92,10 +98,10 @@ func (s *Scraper) createWorkerPool(num_workers int) {
 }
 
 // Sends jobs to job chan
-func (s *Scraper) allocate_jobs(links []string) {
+func (s *Scraper) allocate_jobs(domLinks map[string][]string) {
 
-	for i, link := range links {
-		job := job{id: i, url: link}
+	for domain, urls := range domLinks {
+		job := job{domain: domain, urls: urls}
 		s.jobs <- job
 	}
 	close(s.jobs)
@@ -104,7 +110,7 @@ func (s *Scraper) allocate_jobs(links []string) {
 // Collects results from results chan
 func (s *Scraper) collect_results(done_chan chan bool) {
 	for res := range s.results {
-		fmt.Printf("url: %v\ntitle: %v\nerror: %v\n\n", res.job.url, res.title, res.err)
+		fmt.Printf("url: %v\ntitle: %v\nerror: %v\n\n", res.url, res.title, res.err)
 	}
 	done_chan <- true
 }
@@ -137,44 +143,20 @@ func Run(links []string) {
 	// Get links per domain
 	domainLinks := getDomainLinks(links)
 
-	var mixedLinks []string
-
-	for {
-		fmt.Println("Collecting links per domain...")
-		mixedLinks = []string{}
-
-		// 1. For each domain, get the first link
-
-		for domain, links := range domainLinks {
-			if len(links) > 0 {
-				mixedLinks = append(mixedLinks, links[0])
-				domainLinks[domain] = links[1:]
-			}
-		}
-
-		// End when no more new links
-		if len(mixedLinks) == 0 {
-			break
-		}
-
-		// 2. Scrape mixedLinks using workerpool
-
-		if len(mixedLinks) > MAX_WORKERS {
-			NUM_WORKERS = MAX_WORKERS
-		} else {
-			NUM_WORKERS = len(mixedLinks)
-		}
-
-		s := *NewScraper(NUM_WORKERS)
-
-		done_chan := make(chan bool)
-
-		go s.allocate_jobs(mixedLinks)
-		go s.collect_results(done_chan)
-		s.createWorkerPool(NUM_WORKERS)
-
-		<-done_chan
-
+	if len(domainLinks) > MAX_WORKERS {
+		NUM_WORKERS = MAX_WORKERS
+	} else {
+		NUM_WORKERS = len(domainLinks)
 	}
 
+	// Init chans
+	s := *NewScraper(NUM_WORKERS)
+
+	done_chan := make(chan bool)
+
+	go s.allocate_jobs(domainLinks)
+	go s.collect_results(done_chan)
+	s.createWorkerPool(NUM_WORKERS)
+
+	<-done_chan
 }
