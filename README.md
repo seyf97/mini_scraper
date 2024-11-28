@@ -1,7 +1,7 @@
 # mini_scraper
 A lightweight, concurrent scraper built using Golang
 
-Number of workers are determined from unique hosts
+Implements a worker pool where each worker scrapes one domain
 
 ## Installation
 1. Clone the Repository:
