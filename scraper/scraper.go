@@ -30,37 +30,6 @@ var NUM_WORKERS int
 var jobs = make(chan job, NUM_WORKERS)
 var results = make(chan result, NUM_WORKERS)
 
-// Returns the text from a title element, if it exists
-func get_title(n *html.Node) string {
-	if n.FirstChild != nil && n.FirstChild.Type == html.TextNode {
-		return n.FirstChild.Data
-	}
-	return ""
-}
-
-// Breadth First Search
-func traverseNodes(root *html.Node) string {
-	queue := []*html.Node{root}
-
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-
-		if current.Type == html.ElementNode && current.Data == "title" {
-			title := get_title(current)
-			if title != "" {
-				return title
-			}
-		}
-
-		for child := current.FirstChild; child != nil; child = child.NextSibling {
-			queue = append(queue, child)
-		}
-	}
-
-	return ""
-}
-
 // Gets the page title
 func processPage(link string) (string, error) {
 	client := http.Client{Timeout: TIMEOUT}
@@ -74,7 +43,7 @@ func processPage(link string) (string, error) {
 		return "", err
 	}
 
-	title := traverseNodes(doc)
+	title := get_title(doc)
 
 	return title, nil
 }
@@ -129,7 +98,7 @@ func collect_results(done_chan chan bool) {
 }
 
 // Gets unique hosts from a given list of links
-func GetDomainLinks(links []string) map[string][]string {
+func getDomainLinks(links []string) map[string][]string {
 	domainLinks := map[string][]string{}
 
 	for _, link := range links {
@@ -154,7 +123,7 @@ func GetDomainLinks(links []string) map[string][]string {
 func Scrape(links []string) {
 
 	// Determine num_workers
-	domainLinks := GetDomainLinks(links)
+	domainLinks := getDomainLinks(links)
 	NUM_WORKERS = len(domainLinks)
 
 	done_chan := make(chan bool)
