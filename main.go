@@ -11,11 +11,11 @@ import (
 
 func main() {
 	// Read file and get urls
-	fileName := utils.GetFileName()
+	fileNameIn, fileNameOut := utils.GetFileNames()
 
-	fmt.Printf("Reading file: %s\n", fileName)
+	fmt.Printf("Reading file: %s\n", fileNameIn)
 
-	links, err := utils.ReadCSV(fileName, true)
+	links, err := utils.ReadCSV(fileNameIn, true)
 	if err != nil {
 		panic(err)
 	}
@@ -25,14 +25,21 @@ func main() {
 	}
 
 	// testing
-	links = links[:50000]
+	links = links[:1000]
 
 	// Scrape links
 	start := time.Now()
-	scraper.Run(links)
+	results := scraper.Run(links)
 	end := time.Now()
 
 	diff_seconds := end.Sub(start).Seconds()
 
 	fmt.Printf("Visited %v links in %v seconds\n", len(links), diff_seconds)
+
+	fmt.Printf("Writing file...\n")
+
+	err = utils.WriteCSV(fileNameOut, results)
+	if err != nil {
+		panic(err)
+	}
 }

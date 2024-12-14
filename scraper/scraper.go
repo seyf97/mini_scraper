@@ -13,16 +13,16 @@ type job struct {
 	urls   []string
 }
 
-type result struct {
-	domain   string
-	url      string
-	finalURL string
-	err      error
+type Result struct {
+	Domain   string
+	Url      string
+	FinalURL string
+	Err      error
 }
 
 type Scraper struct {
 	jobs    chan job
-	results chan result
+	results chan Result
 }
 
 // Constants
@@ -36,7 +36,7 @@ var NUM_WORKERS int
 func NewScraper(numWorkers int) *Scraper {
 	return &Scraper{
 		jobs:    make(chan job, numWorkers),
-		results: make(chan result, numWorkers),
+		results: make(chan Result, numWorkers),
 	}
 }
 
@@ -44,6 +44,8 @@ func NewScraper(numWorkers int) *Scraper {
 func processPage(link string) (string, error) {
 	client := http.Client{Timeout: TIMEOUT}
 	resp, err := client.Get(link)
+
+	// Either error, or final url
 	if err != nil {
 		return "", err
 	}
@@ -74,11 +76,11 @@ func (s *Scraper) worker(wg *sync.WaitGroup) {
 		for _, url := range job.urls {
 			finalURL, err := processPage(url)
 
-			res := result{
-				domain:   job.domain,
-				finalURL: finalURL,
-				url:      url,
-				err:      err,
+			res := Result{
+				Domain:   job.domain,
+				FinalURL: finalURL,
+				Url:      url,
+				Err:      err,
 			}
 
 			s.results <- res
@@ -112,9 +114,14 @@ func (s *Scraper) allocate_jobs(domLinks map[string][]string) {
 }
 
 // Collects results from results chan
-func (s *Scraper) collect_results(done_chan chan bool) {
+func (s *Scraper) collect_results(done_chan chan bool, out_results *[]Result) {
 	for res := range s.results {
-		fmt.Printf("url_i: %v\nurl_f: %v\nerror: %v\n\n", res.url, res.finalURL, res.err)
+		*out_results = append(*out_results, res)
+		if res.Err != nil {
+			fmt.Printf("url_i: %v\nurl_f: %v\nerror: %v\n\n", res.Url, res.FinalURL, res.Err)
+		} else {
+			fmt.Printf("url_i: %v\nurl_f: %v\nerror: \n\n", res.Url, res.FinalURL)
+		}
 	}
 	done_chan <- true
 }
@@ -142,10 +149,12 @@ func getDomainLinks(links []string) map[string][]string {
 }
 
 // Scrapes links concurrently
-func Run(links []string) {
+func Run(links []string) (results []Result) {
 
 	// Get links per domain
 	domainLinks := getDomainLinks(links)
+
+	var out_results []Result
 
 	if len(domainLinks) > MAX_WORKERS {
 		NUM_WORKERS = MAX_WORKERS
@@ -159,8 +168,9 @@ func Run(links []string) {
 	done_chan := make(chan bool)
 
 	go s.allocate_jobs(domainLinks)
-	go s.collect_results(done_chan)
+	go s.collect_results(done_chan, &out_results)
 	s.createWorkerPool(NUM_WORKERS)
 
 	<-done_chan
+	return out_results
 }
