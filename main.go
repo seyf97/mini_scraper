@@ -24,8 +24,8 @@ func main() {
 		panic(errors.New("input file has no links"))
 	}
 
-	// testing
-	links = links[:1000]
+	// // testing
+	// links = links[:10]
 
 	// Scrape links
 	start := time.Now()
