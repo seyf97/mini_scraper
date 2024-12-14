@@ -6,131 +6,129 @@ import (
 	"net/url"
 	"sync"
 	"time"
-
-	"golang.org/x/net/html"
 )
 
 type job struct {
-	id  int
-	url string
+	domain string
+	urls   []string
 }
 
-type result struct {
-	job   job
-	title string
-	err   error
+type Result struct {
+	Domain   string
+	Url      string
+	FinalURL string
+	Err      error
 }
 
-// Timeout for the get request
+type Scraper struct {
+	jobs    chan job
+	results chan Result
+}
+
+// Constants
 const TIMEOUT time.Duration = 10 * time.Second
+const DELAY time.Duration = 500 * time.Millisecond
+const MAX_WORKERS int = 50000
 
 // Initialized after determining the
 var NUM_WORKERS int
 
-var jobs = make(chan job, NUM_WORKERS)
-var results = make(chan result, NUM_WORKERS)
-
-// Returns the text from a title element, if it exists
-func get_title(n *html.Node) string {
-	if n.FirstChild != nil && n.FirstChild.Type == html.TextNode {
-		return n.FirstChild.Data
+func NewScraper(numWorkers int) *Scraper {
+	return &Scraper{
+		jobs:    make(chan job, numWorkers),
+		results: make(chan Result, numWorkers),
 	}
-	return ""
-}
-
-// Breadth First Search
-func traverseNodes(root *html.Node) string {
-	queue := []*html.Node{root}
-
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-
-		if current.Type == html.ElementNode && current.Data == "title" {
-			title := get_title(current)
-			if title != "" {
-				return title
-			}
-		}
-
-		for child := current.FirstChild; child != nil; child = child.NextSibling {
-			queue = append(queue, child)
-		}
-	}
-
-	return ""
 }
 
 // Gets the page title
 func processPage(link string) (string, error) {
 	client := http.Client{Timeout: TIMEOUT}
-	res, err := client.Get(link)
+	resp, err := client.Get(link)
+
+	// Either error, or final url
 	if err != nil {
 		return "", err
 	}
 
-	doc, err := html.Parse(res.Body)
-	if err != nil {
-		return "", err
-	}
+	defer resp.Body.Close()
 
-	title := traverseNodes(doc)
+	// Get the final redirected link
+	finalURL := resp.Request.URL.String()
 
-	return title, nil
+	// Get the title
+	// doc, err := html.Parse(resp.Body)
+	// if err != nil {
+	// 	return "", err
+	// }
+
+	// title := get_title(doc)
+
+	return finalURL, nil
 }
 
 // Processes jobs from the job chan and sends results to result chan.
 //
 // Signals WorkerPool once jobs are depleted
-func worker(wg *sync.WaitGroup) {
+func (s *Scraper) worker(wg *sync.WaitGroup) {
 	defer wg.Done()
-	for job := range jobs {
+	for job := range s.jobs {
 
-		title, err := processPage(job.url)
-		res := result{job: job,
-			title: title,
-			err:   err}
+		for _, url := range job.urls {
+			finalURL, err := processPage(url)
 
-		results <- res
+			res := Result{
+				Domain:   job.domain,
+				FinalURL: finalURL,
+				Url:      url,
+				Err:      err,
+			}
+
+			s.results <- res
+		}
 
 		// Sleep between each request
-		time.Sleep(1 * time.Second)
+		time.Sleep(DELAY)
 	}
 }
 
 // Init a worker pool where each worker gets a job from job chan
-func createWorkerPool(num_workers int) {
+func (s *Scraper) createWorkerPool(num_workers int) {
 	var wg sync.WaitGroup
 
 	for i := 0; i < num_workers; i++ {
 		wg.Add(1)
-		go worker(&wg)
+		go s.worker(&wg)
 	}
 	wg.Wait()
-	close(results)
+	close(s.results)
 }
 
 // Sends jobs to job chan
-func allocate_jobs(links []string) {
+func (s *Scraper) allocate_jobs(domLinks map[string][]string) {
 
-	for i, link := range links {
-		job := job{id: i, url: link}
-		jobs <- job
+	for domain, urls := range domLinks {
+		job := job{domain: domain, urls: urls}
+		s.jobs <- job
 	}
-	close(jobs)
+	close(s.jobs)
 }
 
 // Collects results from results chan
-func collect_results(done_chan chan bool) {
-	for res := range results {
-		fmt.Printf("url: %v\ntitle: %v\nerror: %v\n\n", res.job.url, res.title, res.err)
+func (s *Scraper) collect_results(done_chan chan bool, out_results *[]Result) {
+	for res := range s.results {
+		*out_results = append(*out_results, res)
+		if res.Err != nil {
+			fmt.Printf("url_i: %v\nurl_f: %v\nerror: %v\n\n", res.Url, res.FinalURL, res.Err)
+		} else {
+			fmt.Printf("url_i: %v\nurl_f: %v\nerror: \n\n", res.Url, res.FinalURL)
+		}
 	}
 	done_chan <- true
 }
 
 // Gets unique hosts from a given list of links
-func getDomains(links []string) map[string]bool {
-	domains := map[string]bool{}
+func getDomainLinks(links []string) map[string][]string {
+	domainLinks := map[string][]string{}
 
 	for _, link := range links {
 		u, err := url.Parse(link)
@@ -139,27 +137,40 @@ func getDomains(links []string) map[string]bool {
 		}
 
 		// Add the unique domain
-		_, ok := domains[u.Host]
-		if !ok {
-			domains[u.Host] = true
+		_, isPresent := domainLinks[u.Host]
+		if !isPresent {
+			domainLinks[u.Host] = []string{link}
+		} else {
+			domainLinks[u.Host] = append(domainLinks[u.Host], link)
 		}
 
 	}
-	return domains
+	return domainLinks
 }
 
 // Scrapes links concurrently
-func Scrape(links []string) {
+func Run(links []string) (results []Result) {
 
-	// Determine num_workers
-	domains := getDomains(links)
-	NUM_WORKERS = len(domains)
+	// Get links per domain
+	domainLinks := getDomainLinks(links)
+
+	var out_results []Result
+
+	if len(domainLinks) > MAX_WORKERS {
+		NUM_WORKERS = MAX_WORKERS
+	} else {
+		NUM_WORKERS = len(domainLinks)
+	}
+
+	// Init chans
+	s := *NewScraper(NUM_WORKERS)
 
 	done_chan := make(chan bool)
 
-	go allocate_jobs(links)
-	go collect_results(done_chan)
-	createWorkerPool(NUM_WORKERS)
+	go s.allocate_jobs(domainLinks)
+	go s.collect_results(done_chan, &out_results)
+	s.createWorkerPool(NUM_WORKERS)
 
 	<-done_chan
+	return out_results
 }
