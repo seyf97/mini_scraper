@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"sync"
@@ -30,6 +31,19 @@ const TIMEOUT time.Duration = 10 * time.Second
 const DELAY time.Duration = 500 * time.Millisecond
 const MAX_WORKERS int = 50000
 
+var USER_AGENTS = []string{
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 12_6_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.132 Safari/537.36",
+	"Mozilla/5.0 (Linux; Android 12; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Mobile Safari/537.36",
+	"Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+	"Mozilla/5.0 (Windows NT 10.0; WOW64; rv:117.0) Gecko/20100101 Firefox/117.0",
+	"Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:117.0) Gecko/20100101 Firefox/117.0",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 12_5_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15",
+	"Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Mobile Safari/537.36",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:116.0) Gecko/20100101 Firefox/116.0",
+	"Mozilla/5.0 (iPad; CPU OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1",
+}
+
 // Initialized after determining the
 var NUM_WORKERS int
 
@@ -42,10 +56,21 @@ func NewScraper(numWorkers int) *Scraper {
 
 // Gets the page title
 func processPage(link string) (string, error) {
-	client := http.Client{Timeout: TIMEOUT}
-	resp, err := client.Get(link)
 
-	// Either error, or final url
+	// Get a random user agent
+	randIdx := rand.Intn(len(USER_AGENTS))
+	randAgent := USER_AGENTS[randIdx]
+
+	client := http.Client{Timeout: TIMEOUT}
+
+	req, err := http.NewRequest("GET", link, nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("User-Agent", randAgent)
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
