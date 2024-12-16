@@ -34,12 +34,8 @@ https://anotherexample.com
 
 2. Run the scraper
 
-Use the -f or --file flag to specify the input CSV file
+Use the -i and -o flags to specify the input CSV file and target output CSV file, respectively.
 
 ```
-go run main.go -f urls.csv
-```
-or
-```
-go run main.go --file urls.csv
+go run main.go -i urls.csv -o results.csv
 ```
