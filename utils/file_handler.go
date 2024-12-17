@@ -10,37 +10,35 @@ import (
 )
 
 // Reads a csv file, assuming it has a single column
-func ReadCSV(fileName string, hasHeaders bool) ([]string, error) {
+// func ReadCSV(fileName string, hasHeaders bool, rowNo, buffer int) ([]string, error) {
 
-	file, err := os.Open(fileName)
-	if err != nil {
-		return []string{}, err
-	}
+// 	file, err := os.Open(fileName)
+// 	if err != nil {
+// 		return []string{}, err
+// 	}
 
-	defer file.Close()
+// 	defer file.Close()
 
-	reader := csv.NewReader(file)
+// 	reader := csv.NewReader(file)
 
-	records, err := reader.ReadAll()
-	if err != nil {
-		return []string{}, err
-	}
+// 	records, err := reader.ReadAll()
+// 	if err != nil {
+// 		return []string{}, err
+// 	}
 
-	urls := []string{}
+// 	for _, row := range records {
+// 		if len(row) > 0 {
+// 			urls = append(urls, row[0])
+// 		}
+// 	}
 
-	for _, row := range records {
-		if len(row) > 0 {
-			urls = append(urls, row[0])
-		}
-	}
+// 	// Skip the headers
+// 	if hasHeaders && len(urls) > 0 {
+// 		urls = urls[1:]
+// 	}
 
-	// Skip the headers
-	if hasHeaders && len(urls) > 0 {
-		urls = urls[1:]
-	}
-
-	return urls, nil
-}
+// 	return urls, nil
+// }
 
 func WriteCSV(filename string, results []scraper.Result) error {
 	file, err := os.Create(filename)
