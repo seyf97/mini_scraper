@@ -32,18 +32,20 @@ type Scraper struct {
 const TIMEOUT time.Duration = 10 * time.Second
 const DELAY time.Duration = 500 * time.Millisecond
 
+// Variables
+var BATCHSIZE int   // Number of links to be processed at each iteration
+var NUM_WORKERS int // Initialized after determining unqiue domains
+
 var httpClient = &http.Client{
 	Timeout: TIMEOUT,
 	Transport: &http.Transport{
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 100,
+		MaxIdleConns:        BATCHSIZE,
+		MaxIdleConnsPerHost: BATCHSIZE,
 		IdleConnTimeout:     TIMEOUT,
 	},
 }
 
 var writer *csv.Writer
-
-// const MAX_WORKERS int = 5000
 
 var USER_AGENTS = []string{
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
@@ -57,9 +59,6 @@ var USER_AGENTS = []string{
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:116.0) Gecko/20100101 Firefox/116.0",
 	"Mozilla/5.0 (iPad; CPU OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1",
 }
-
-// Initialized after determining the
-var NUM_WORKERS int
 
 func NewScraper(numWorkers int) *Scraper {
 	return &Scraper{
@@ -91,14 +90,6 @@ func processPage(link string) (string, error) {
 
 	// Get the final redirected link
 	finalURL := resp.Request.URL.String()
-
-	// Get the title
-	// doc, err := html.Parse(resp.Body)
-	// if err != nil {
-	// 	return "", err
-	// }
-
-	// title := get_title(doc)
 
 	return finalURL, nil
 }
@@ -192,13 +183,6 @@ func Run(links []string) {
 	// Get links per domain
 	domainLinks := getDomainLinks(links)
 
-	// var out_results []Result
-
-	// if len(domainLinks) > MAX_WORKERS {
-	// 	NUM_WORKERS = MAX_WORKERS
-	// } else {
-	// 	NUM_WORKERS = len(domainLinks)
-	// }
 	NUM_WORKERS := len(domainLinks)
 
 	// Init chans
@@ -214,6 +198,8 @@ func Run(links []string) {
 }
 
 func BatchRun(fileInName, fileOutName string, batchSize int) {
+
+	BATCHSIZE = batchSize
 
 	fileIn, err := os.Open(fileInName)
 	if err != nil {
@@ -262,20 +248,19 @@ func BatchRun(fileInName, fileOutName string, batchSize int) {
 		processBatch(urls)
 	}
 
-	fmt.Println("Finished processing")
-
+	fmt.Println("finished processing batches.")
 }
 
+// Processes batch of URLs
 func processBatch(urls []string) {
-	fmt.Println("Starting batch processing...")
-
-	time.Sleep(1 * time.Second)
+	fmt.Println("starting batch processing...")
 
 	Run(urls)
 
-	fmt.Println("Batch processing complete.")
+	fmt.Println("batch processing complete.")
 }
 
+// Wrapper to write results from the results chan
 func writeResult(res Result) {
 	var err_val string
 	if res.Err != nil {
