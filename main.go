@@ -26,7 +26,8 @@ func main() {
 	// Scrape links
 	start := time.Now()
 	// results := scraper.Run(links)
-	scraper.BatchRun(fileNameIn, fileNameOut, 5000)
+	batchSize := 100
+	scraper.BatchRun(fileNameIn, fileNameOut, batchSize)
 	end := time.Now()
 
 	diff_seconds := end.Sub(start).Seconds()

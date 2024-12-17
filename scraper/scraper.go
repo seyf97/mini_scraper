@@ -31,7 +31,10 @@ type Scraper struct {
 // Constants
 const TIMEOUT time.Duration = 10 * time.Second
 const DELAY time.Duration = 500 * time.Millisecond
-const MAX_WORKERS int = 5000
+
+var httpClient = &http.Client{Timeout: TIMEOUT}
+
+// const MAX_WORKERS int = 5000
 
 var USER_AGENTS = []string{
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
@@ -63,8 +66,6 @@ func processPage(link string) (string, error) {
 	randIdx := rand.Intn(len(USER_AGENTS))
 	randAgent := USER_AGENTS[randIdx]
 
-	client := http.Client{Timeout: TIMEOUT}
-
 	req, err := http.NewRequest("GET", link, nil)
 	if err != nil {
 		return "", err
@@ -72,7 +73,7 @@ func processPage(link string) (string, error) {
 
 	req.Header.Set("User-Agent", randAgent)
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -183,11 +184,12 @@ func Run(links []string) (results []Result) {
 
 	var out_results []Result
 
-	if len(domainLinks) > MAX_WORKERS {
-		NUM_WORKERS = MAX_WORKERS
-	} else {
-		NUM_WORKERS = len(domainLinks)
-	}
+	// if len(domainLinks) > MAX_WORKERS {
+	// 	NUM_WORKERS = MAX_WORKERS
+	// } else {
+	// 	NUM_WORKERS = len(domainLinks)
+	// }
+	NUM_WORKERS := len(domainLinks)
 
 	// Init chans
 	s := *NewScraper(NUM_WORKERS)
