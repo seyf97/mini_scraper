@@ -39,9 +39,9 @@ var NUM_WORKERS int // Initialized after determining unqiue domains
 var httpClient = &http.Client{
 	Timeout: TIMEOUT,
 	Transport: &http.Transport{
-		MaxIdleConns:        BATCHSIZE,
-		MaxIdleConnsPerHost: BATCHSIZE,
-		IdleConnTimeout:     TIMEOUT,
+		MaxIdleConns:        1000,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     60 * time.Second,
 	},
 }
 
