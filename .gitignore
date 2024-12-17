@@ -28,3 +28,6 @@ go.work.sum
 *.csv
 *.txt
 
+#mac
+.DS_Store
+
