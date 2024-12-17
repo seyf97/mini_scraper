@@ -32,7 +32,16 @@ type Scraper struct {
 const TIMEOUT time.Duration = 10 * time.Second
 const DELAY time.Duration = 500 * time.Millisecond
 
-var httpClient = &http.Client{Timeout: TIMEOUT}
+var httpClient = &http.Client{
+	Timeout: TIMEOUT,
+	Transport: &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 100,
+		IdleConnTimeout:     TIMEOUT,
+	},
+}
+
+var writer *csv.Writer
 
 // const MAX_WORKERS int = 5000
 
@@ -142,14 +151,15 @@ func (s *Scraper) allocate_jobs(domLinks map[string][]string) {
 }
 
 // Collects results from results chan
-func (s *Scraper) collect_results(done_chan chan bool, out_results *[]Result) {
+func (s *Scraper) collect_results(done_chan chan bool) {
 	for res := range s.results {
-		*out_results = append(*out_results, res)
 		if res.Err != nil {
 			fmt.Printf("url_i: %v\nurl_f: %v\nerror: %v\n\n", res.Url, res.FinalURL, res.Err)
 		} else {
 			fmt.Printf("url_i: %v\nurl_f: %v\nerror: \n\n", res.Url, res.FinalURL)
 		}
+		writeResult(res)
+
 	}
 	done_chan <- true
 }
@@ -177,12 +187,12 @@ func getDomainLinks(links []string) map[string][]string {
 }
 
 // Scrapes links concurrently
-func Run(links []string) (results []Result) {
+func Run(links []string) {
 
 	// Get links per domain
 	domainLinks := getDomainLinks(links)
 
-	var out_results []Result
+	// var out_results []Result
 
 	// if len(domainLinks) > MAX_WORKERS {
 	// 	NUM_WORKERS = MAX_WORKERS
@@ -197,11 +207,10 @@ func Run(links []string) (results []Result) {
 	done_chan := make(chan bool)
 
 	go s.allocate_jobs(domainLinks)
-	go s.collect_results(done_chan, &out_results)
+	go s.collect_results(done_chan)
 	s.createWorkerPool(NUM_WORKERS)
 
 	<-done_chan
-	return out_results
 }
 
 func BatchRun(fileInName, fileOutName string, batchSize int) {
@@ -218,7 +227,7 @@ func BatchRun(fileInName, fileOutName string, batchSize int) {
 	}
 	defer fileOut.Close()
 
-	writer := csv.NewWriter(fileOut)
+	writer = csv.NewWriter(fileOut)
 	defer writer.Flush()
 
 	// Header
@@ -244,47 +253,47 @@ func BatchRun(fileInName, fileOutName string, batchSize int) {
 
 		// Process after batch size is reached
 		if len(urls) >= batchSize {
-			processBatch(urls, writer)
-			urls = []string{} // clear urls
+			processBatch(urls)
+			urls = []string{}
 		}
 	}
 
 	if len(urls) > 0 {
-		processBatch(urls, writer)
+		processBatch(urls)
 	}
 
 	fmt.Println("Finished processing")
 
 }
 
-func processBatch(urls []string, writer *csv.Writer) {
+func processBatch(urls []string) {
 	fmt.Println("Starting batch processing...")
+
 	time.Sleep(1 * time.Second)
 
-	results := Run(urls)
+	Run(urls)
 
-	for _, res := range results {
-		var err_val string
-		if res.Err != nil {
-			err_val = fmt.Sprintf("%v", res.Err)
-		} else {
-			err_val = ""
-		}
+	fmt.Println("Batch processing complete.")
+}
 
-		err := writer.Write([]string{res.Url, res.FinalURL, err_val})
-		if err != nil {
-			panic(fmt.Sprintf("failed to write record: %v\n", err))
-		}
-
+func writeResult(res Result) {
+	var err_val string
+	if res.Err != nil {
+		err_val = fmt.Sprintf("%v", res.Err)
+	} else {
+		err_val = ""
 	}
-	writer.Flush()
-	err := writer.Error()
 
+	err := writer.Write([]string{res.Url, res.FinalURL, err_val})
+	if err != nil {
+		panic(fmt.Sprintf("failed to write record: %v\n", err))
+	}
+
+	writer.Flush()
+
+	err = writer.Error()
 	if err != nil {
 		panic(fmt.Sprintf("error flushing writer: %v\n", err))
 
 	}
-
-	fmt.Println("Batch processing complete.")
-
 }

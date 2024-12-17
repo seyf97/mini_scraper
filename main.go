@@ -2,13 +2,21 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"time"
+
+	"net/http"
+	_ "net/http/pprof"
 
 	"github.com/seyf97/mini_scraper/scraper"
 	"github.com/seyf97/mini_scraper/utils"
 )
 
 func main() {
+
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	// Read file and get urls
 	fileNameIn, fileNameOut := utils.GetFileNames()
 
