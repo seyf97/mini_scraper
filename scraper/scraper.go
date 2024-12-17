@@ -1,10 +1,12 @@
 package scraper
 
 import (
+	"encoding/csv"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"sync"
 	"time"
 )
@@ -29,7 +31,7 @@ type Scraper struct {
 // Constants
 const TIMEOUT time.Duration = 10 * time.Second
 const DELAY time.Duration = 500 * time.Millisecond
-const MAX_WORKERS int = 50000
+const MAX_WORKERS int = 5000
 
 var USER_AGENTS = []string{
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
@@ -198,4 +200,89 @@ func Run(links []string) (results []Result) {
 
 	<-done_chan
 	return out_results
+}
+
+func BatchRun(fileInName, fileOutName string, batchSize int) {
+
+	fileIn, err := os.Open(fileInName)
+	if err != nil {
+		panic(fmt.Sprintf("error opening file: %v\n", err))
+	}
+	defer fileIn.Close()
+
+	fileOut, err := os.OpenFile(fileOutName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(fmt.Sprintf("error opening output file: %v\n", err))
+	}
+	defer fileOut.Close()
+
+	writer := csv.NewWriter(fileOut)
+	defer writer.Flush()
+
+	// Header
+	err = writer.Write([]string{"link", "redirected_link", "error"})
+	if err != nil {
+		panic(fmt.Sprintf("failed to write header: %v\n", err))
+	}
+
+	reader := csv.NewReader(fileIn)
+
+	urls := []string{}
+	for {
+		row, err := reader.Read()
+		if err != nil {
+			// Reached the end of the line
+			if err.Error() == "EOF" {
+				break
+			}
+			panic(fmt.Sprintf("error reading file: %v\n", err))
+		}
+
+		urls = append(urls, row[0])
+
+		// Process after batch size is reached
+		if len(urls) >= batchSize {
+			processBatch(urls, writer)
+			urls = []string{} // clear urls
+		}
+	}
+
+	if len(urls) > 0 {
+		processBatch(urls, writer)
+	}
+
+	fmt.Println("Finished processing")
+
+}
+
+func processBatch(urls []string, writer *csv.Writer) {
+	fmt.Println("Starting batch processing...")
+	time.Sleep(1 * time.Second)
+
+	results := Run(urls)
+
+	for _, res := range results {
+		var err_val string
+		if res.Err != nil {
+			err_val = fmt.Sprintf("%v", res.Err)
+		} else {
+			err_val = ""
+		}
+
+		err := writer.Write([]string{res.Url, res.FinalURL, err_val})
+		if err != nil {
+			panic(fmt.Sprintf("failed to write record: %v\n", err))
+		}
+
+	}
+	writer.Flush()
+	err := writer.Error()
+
+	if err != nil {
+		panic(fmt.Sprintf("error flushing writer: %v\n", err))
+
+	}
+
+	fmt.Println("Batch processing complete.")
+
 }
